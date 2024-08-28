@@ -105,13 +105,14 @@ fn send_ems(mut port: Box<dyn SerialPort>, rate: &u32) {
         let dynon_serialized_data = &ems_frame.serialize();
         match dynon_serialized_data {
             DynonSerializedData::D1x0Ems(bytes) => {
-                match port.write( &bytes[0..]) {
-                    Ok(_) => {
+                match port.write_all(&bytes[0..]) {
+                    Ok(_) => (), 
+                   // {
                         //print!("{}", byte_string);
-                        std::io::stdout().flush().unwrap();
-                    }
+                   //     std::io::stdout().flush().unwrap();
+                  //  }
                     Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
-                    Err(e) => {eprintln!("{:?}", e); ::std::process::exit(1);},
+                    Err(e) => panic!("Error while eriting data to the port: {}", e), // {eprintln!("{:?}", e); ::std::process::exit(1);},
                 }
                 if r == 0 {
                     return;
@@ -136,6 +137,16 @@ fn send_efis(mut port: Box<dyn SerialPort>, rate: &u32) {
         let dynon_serialized_data = &efis_frame.serialize();
         match dynon_serialized_data {
             DynonSerializedData::D1x0Efis(bytes) => {
+                match port.write_all(&bytes[0..]) {
+                    Ok(_) => (), 
+                   // {
+                        //print!("{}", byte_string);
+                   //     std::io::stdout().flush().unwrap();
+                  //  }
+                    Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
+                    Err(e) => panic!("Error while eriting data to the port: {}", e), // {eprintln!("{:?}", e); ::std::process::exit(1);},
+                }
+/*                
                 match port.write( &bytes[0..]) {
                     Ok(_) => {
                         //print!("{}", byte_string);
@@ -144,6 +155,7 @@ fn send_efis(mut port: Box<dyn SerialPort>, rate: &u32) {
                     Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
                     Err(e) => {eprintln!("{:?}", e); ::std::process::exit(1);},
                 }
+*/
                 if r == 0 {
                     return;
                 }
