@@ -4,6 +4,7 @@ use std::io::{self, Write};
 use std::process::exit;
 use std::time::Duration;
 use std::thread;
+use std::vec;
 
 use clap::{Arg, Command};
 
@@ -22,8 +23,8 @@ Write dummy efis or ems data frames to a serial port.
 - Defauls to 115200 baud & 1Hz transmission rate which
   is the Dynon EFIS D100 & EMS D120 max rate.
 
-- THE TIME VALUE NEEDS CHANGING TO A PURE INCREMENT NOT THE
-  FUNCTION CURRENTLY USED.
+- The time value updates incrementally & does not relate
+  to a system time.
 ";
 
 
@@ -77,9 +78,8 @@ fn main() {
         ::std::process::exit(1);
     });
 
-    println!("THE TIME VALUE NEEDS CHANGING TO A PURE INCREMENT NOT THE
-  FUNCTION CURRENTLY USED.\n \
-        Sending Dynon D1X0 {} data to {} at {} baud at {}Hz",
+    println!(
+        "Sending Dynon D1X0 {} data to {} at {} baud at {}Hz",
         &data_type.to_uppercase(), &port_name, &baud_rate, &rate
     );
 
@@ -120,11 +120,7 @@ fn send_ems(mut port: Box<dyn SerialPort>, rate: &u32) {
             DynonSerializedData::D1x0Ems(bytes) => {
                 match port.write_all(&bytes[0..]) {
                     Ok(_) => (), 
-                   // {
-                        //print!("{}", byte_string);
-                   //     std::io::stdout().flush().unwrap();
-                  //  }
-                    Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
+                     Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
                     Err(e) => panic!("Error while eriting data to the port: {}", e), // {eprintln!("{:?}", e); ::std::process::exit(1);},
                 }
                 if r == 0 {
