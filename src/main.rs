@@ -44,25 +44,25 @@ fn valid_baud(val: &str) -> std::result::Result<(), String> {
 }
 
 
-fn send_packets(dynon_device: &mut impl DynonDevice, mut port: Box<dyn SerialPort>, rate: &u32) {
+fn send_packets(dynon_device: &mut impl DynonDevice, mut port: Option<Box<dyn SerialPort>>, rate: &u32) {
     let r = *rate;
     loop {
         let (eol, bytes) = dynon_device.as_bytes();
-        match port.write_all(bytes) {
-            Ok(_) => {
-                match str::from_utf8(&bytes) {
-                        Ok(s) => {
-                            print!("{}", s);
-                            io::stdout().flush();
-                        }
-                        Err(e) => {
-                            eprintln!("Invalid UTF-8 sequence: {}", e);
-                        }
-                    }
+        match str::from_utf8(&bytes) {
+            Ok(s) => {
+                print!("{}", s);
+                io::stdout().flush();
             }
-
-            Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
-            Err(e) => panic!("Error while writing data to the port: {}", e),
+            Err(e) => {
+                eprintln!("Invalid UTF-8 sequence: {}", e);
+            }
+        }
+        if let Some(port) = port {
+            match port.write_all(bytes) {
+                Ok(_) => (),
+                Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
+                Err(e) => panic!("Error while writing data to the port: {}", e),
+            }
         }
         if (!eol) {
             std::thread::sleep(Duration::from_millis(220));
@@ -85,15 +85,15 @@ fn main() {
         .about(ABOUT)
         .disable_version_flag(true)
         .arg(
-            Arg::new("port")
-                .help("The device path to a serial port")
-                .required(true),
-        )
-        .arg(
             Arg::new("type")
                 .value_parser([EFIS_DATA_OPTION, EMS_DATA_OPTION, TEST_DATA_OPTION])
                 .default_value("ems")
                 .help("The type of data to send - ems or efis")
+        ).arg(
+            Arg::new("port")
+                .long("port")
+                .help("The device path to a serial port")
+                .required(false),
         ).arg(
             Arg::new("baud")
                 .long("baud")
@@ -112,21 +112,25 @@ fn main() {
         )
         .get_matches();
 
-    let port_name = matches.get_one::<String>("port").unwrap();
     let data_type: &String = matches.get_one::<String>("type").expect("default");
     let baud_rate = matches.get_one::<u32>("baud").unwrap(); //.parse::<u32>().unwrap();
     let rate = matches.get_one::<u32>("rate").unwrap(); //.parse::<u32>().unwrap();
+    let mut port: Option<Box<dyn SerialPort>> = Option::None;
+    if let port_name = matches.get_one::<String>("port"){
 
-    let builder = serialport::new(  port_name, *baud_rate)
-        .stop_bits(StopBits::One)
-        .data_bits(DataBits::Eight);
+        let builder = serialport::new(  port_name, *baud_rate)
+            .stop_bits(StopBits::One)
+            .data_bits(DataBits::Eight);
+
+        port = builder.open().unwrap_or_else(|e| {
+            eprintln!("Failed to open \"{}\". Error: {}", port_name, e);
+            ::std::process::exit(1);
+        });
+    }
     // println!("Available ports: {:#?}", serialport::available_ports());
     //println!("{:?}", &builder);
 
-    let mut port = builder.open().unwrap_or_else(|e| {
-        eprintln!("Failed to open \"{}\". Error: {}", port_name, e);
-        ::std::process::exit(1);
-    });
+    let mut
 
     println!(
         "Sending Dynon D1X0 {} data at {} baud at {}Hz",
@@ -134,7 +138,7 @@ fn main() {
     );
 
     match data_type.as_str() {
-        EFIS_DATA_OPTION => send_packets(&mut D1x0EFISDevice::new(Some(100)), port, rate),
+        EFIS_DATA_OPTION => send_packets(&mut D1x0EFISDevice::new(Some(100)), Option<, rate),
         EMS_DATA_OPTION => send_packets(&mut D1x0EMSDevice::new(Some(100)), port, rate),
         TEST_DATA_OPTION => send_packets(&mut TestDevice::new(Some(100)), port, rate),
         _ => { eprintln!("Invalid type specified: use either efis or ems"); ::std::process::exit(1);}
