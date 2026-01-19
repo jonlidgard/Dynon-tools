@@ -113,7 +113,6 @@ impl D1x0EMSDevice {
 
         // crc
         let crc = Self::calc_crc(&self.bytes);
-
         Self::add_crc_crlf(crc, &mut self.bytes);
         self.system_time += 1;
     }
@@ -122,17 +121,13 @@ impl D1x0EMSDevice {
 impl DynonDevice for D1x0EMSDevice {
 
     fn as_bytes(&mut self) -> (bool, &[u8]) {
-
-        if (self.frame_start == 0) {
-            self.update();
-        }
-
         let mut rng = rng();
         let slice_start = self.frame_start;
         let slice_end = rng.random_range((slice_start+1)..D1X0_EMS_FRAME_LENGTH+1);
         self.frame_start = slice_end;
         if self.frame_start >= D1X0_EMS_FRAME_LENGTH {
             self.frame_start = 0;
+            self.update();
         }
         (self.frame_start == 0, &self.bytes[slice_start..slice_end])
     }

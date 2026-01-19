@@ -68,7 +68,6 @@ impl TestDevice {
 
 impl DynonDevice for TestDevice {
     fn as_bytes(&mut self) -> (bool, &[u8]) {
-
         let mut rng = rng();
         let slice_start = self.frame_start;
         let slice_end = rng.random_range((slice_start+1)..27);
