@@ -65,7 +65,7 @@ fn send_packets(dynon_device: &mut impl DynonDevice, mut port: Option<Box<dyn Se
             }
         }
         if (!eol) {
-            std::thread::sleep(Duration::from_millis(220));
+            std::thread::sleep(Duration::from_millis(20));
         }
         else {
             if r == 0 {
