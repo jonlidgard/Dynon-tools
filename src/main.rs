@@ -15,9 +15,12 @@ use std::thread;
 use std::vec;
 use clap::{Arg, Command};
 use serialport::{DataBits, SerialPort, StopBits};
-use dynon_data_defs::*;
+use crate::dynon_device::*;
+use crate::dynon_device::d1x0efis::D1x0EFISDevice;
+use crate::dynon_device::d1x0ems::D1x0EMSDevice;
 
-mod dynon_data_defs;
+pub mod dynon_device;
+
 
 const EFIS_DATA_OPTION: &str = "efis";
 const EMS_DATA_OPTION: &str = "ems";
@@ -41,17 +44,16 @@ fn valid_baud(val: &str) -> std::result::Result<(), String> {
 }
 
 
-fn send_packets(dynon_device: &mut impl DynonSerialize, mut port: Box<dyn SerialPort>, rate: &u32) {
-    let mut frame_time = 1;
+fn send_packets(dynon_device: &mut impl DynonDevice, mut port: Box<dyn SerialPort>, rate: &u32) {
     let r = *rate;
     loop {
-        frame_time +=1;
-        let bytes = dynon_device.as_bytes();
+        let (eol, bytes) = dynon_device.as_bytes();
         match port.write_all(bytes) {
             Ok(_) => {
                 match str::from_utf8(&bytes) {
                         Ok(s) => {
-                            println!("{}", s);
+                            print!("{}", s);
+                            io::stdout().flush();
                         }
                         Err(e) => {
                             eprintln!("Invalid UTF-8 sequence: {}", e);
@@ -59,14 +61,20 @@ fn send_packets(dynon_device: &mut impl DynonSerialize, mut port: Box<dyn Serial
                     }
             }
 
-                Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
+            Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
             Err(e) => panic!("Error while writing data to the port: {}", e),
         }
-
-        if r == 0 {
-            break;
-        } else {
-            std::thread::sleep(Duration::from_millis((1000.0 / (r as f32)) as u64));
+        if (!eol) {
+            std::thread::sleep(Duration::from_millis(220));
+        }
+        else {
+            if r == 0 {
+                break;
+            }
+            else {
+                std::thread::sleep(Duration::from_millis((1000.0 / (r as f32)) as u64));
+               // println!("");
+            }
         }
     }
 }
@@ -125,13 +133,10 @@ fn main() {
         &data_type.to_uppercase(), &baud_rate, &rate
     );
 
-    let mut frame_time = 1;
-    //let mut ems_frame: dynon_data_defs::D1x0EMSData;
-
     match data_type.as_str() {
-        EFIS_DATA_OPTION => send_packets(&mut D1x0EFISData::new(frame_time, Some(100)), port, rate),
-        EMS_DATA_OPTION => send_packets(&mut D1x0EMSData::new(frame_time, Some(100)), port, rate),
-        TEST_DATA_OPTION => send_packets(&mut TestData::new(frame_time, Some(100)), port, rate),
+        EFIS_DATA_OPTION => send_packets(&mut D1x0EFISDevice::new(Some(100)), port, rate),
+        EMS_DATA_OPTION => send_packets(&mut D1x0EMSDevice::new(Some(100)), port, rate),
+        TEST_DATA_OPTION => send_packets(&mut TestDevice::new(Some(100)), port, rate),
         _ => { eprintln!("Invalid type specified: use either efis or ems"); ::std::process::exit(1);}
     }
 
