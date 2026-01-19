@@ -57,7 +57,7 @@ fn send_packets(dynon_device: &mut impl DynonDevice, mut port: Option<Box<dyn Se
                 eprintln!("Invalid UTF-8 sequence: {}", e);
             }
         }
-        if let Some(port) = port {
+        if let Some(ref mut port) = port {
             match port.write_all(bytes) {
                 Ok(_) => (),
                 Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
@@ -116,21 +116,20 @@ fn main() {
     let baud_rate = matches.get_one::<u32>("baud").unwrap(); //.parse::<u32>().unwrap();
     let rate = matches.get_one::<u32>("rate").unwrap(); //.parse::<u32>().unwrap();
     let mut port: Option<Box<dyn SerialPort>> = Option::None;
-    if let port_name = matches.get_one::<String>("port"){
+    let port_name = matches.get_one::<String>("port");
+    if let Some(port_name) = port_name {
 
         let builder = serialport::new(  port_name, *baud_rate)
             .stop_bits(StopBits::One)
             .data_bits(DataBits::Eight);
 
-        port = builder.open().unwrap_or_else(|e| {
+        port = Some(builder.open().unwrap_or_else(|e| {
             eprintln!("Failed to open \"{}\". Error: {}", port_name, e);
             ::std::process::exit(1);
-        });
+        }));
     }
     // println!("Available ports: {:#?}", serialport::available_ports());
     //println!("{:?}", &builder);
-
-    let mut
 
     println!(
         "Sending Dynon D1X0 {} data at {} baud at {}Hz",
@@ -138,7 +137,7 @@ fn main() {
     );
 
     match data_type.as_str() {
-        EFIS_DATA_OPTION => send_packets(&mut D1x0EFISDevice::new(Some(100)), Option<, rate),
+        EFIS_DATA_OPTION => send_packets(&mut D1x0EFISDevice::new(Some(100)), port, rate),
         EMS_DATA_OPTION => send_packets(&mut D1x0EMSDevice::new(Some(100)), port, rate),
         TEST_DATA_OPTION => send_packets(&mut TestDevice::new(Some(100)), port, rate),
         _ => { eprintln!("Invalid type specified: use either efis or ems"); ::std::process::exit(1);}

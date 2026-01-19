@@ -12,7 +12,6 @@ use crate::dynon_device::d1x0ems::D1x0EMSDevice;
 
 pub mod d1x0efis;
 pub mod d1x0ems;
-
 pub const SYSTEM_TIME_LENGTH: usize = 8;
 
 pub trait DynonDevice {
