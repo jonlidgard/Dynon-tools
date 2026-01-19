@@ -1,8 +1,12 @@
 #![allow(unused)]
 #[cfg(test)]
 
-use core::{str, time};
+extern crate rand;
 
+use core::{str, time};
+//use std::slice::range;
+use rand::Rng;
+use rand::rng;
 
 const D1X0_EMS_FRAME_LENGTH: usize = 121;
 const D1X0_EFIS_FRAME_LENGTH: usize = 53;
@@ -11,7 +15,7 @@ const SYSTEM_TIME_LENGTH: usize = 8;
 type D1x0EmsFrame = [u8; D1X0_EMS_FRAME_LENGTH];
 type D1x0EfisFrame = [u8; D1X0_EFIS_FRAME_LENGTH];
 
-pub trait DynonSerializable {
+pub trait DynonSerialize {
     fn calc_crc(data: &[u8]) -> u8 {
         let sum: u64 = data[..data.len()-4].iter().map(|x| *x as u64).sum();
         (sum & 0xff) as u8
@@ -25,24 +29,57 @@ pub trait DynonSerializable {
         //println!("CRC: {:?}, {:?}",crc, crc_str);
         data[l-4 .. l-2].copy_from_slice(crc_str.as_bytes());
 
-        // CRLF        
+        // CRLF
         data[l-1] = b'\n';
         data[l-2] = b'\r';
     }
 
-    fn serialize(&self) -> DynonSerializedData;
+    fn as_bytes(&mut self) -> &[u8];
 }
 
 
-pub enum DynonSerializedData {
-//    Adahrs,
-//    System,
-//    EMS,
-    D1x0Efis(D1x0EfisFrame),
-    D1x0Ems(D1x0EmsFrame),
+#[derive(Debug)]
+pub struct TestData {
+    bytes: [u8; 26],
+    frame_start: usize,
 }
 
+impl TestData {
 
+    pub fn new(time_count: u32, freq: Option<u32>) -> Self {
+
+        const fn create_alphabet_array() -> [u8; 26] {
+            let mut arr = [0; 26]; // Initialize with a default value that implements Copy
+            let mut i = 0;
+            while i < 26 {
+                // 'A' as u8 gets the ASCII value, add the index, cast back to char
+                arr[i] = (b'A' + i as u8);
+                i += 1;
+            }
+            arr
+        }
+
+        const ALPHABET: [u8; 26] = create_alphabet_array();
+        Self {
+            bytes: ALPHABET,
+            frame_start: 0,
+        }
+    }
+}
+
+impl DynonSerialize for TestData {
+    fn as_bytes(&mut self) -> &[u8] {
+
+        let mut rng = rng();
+        let slice_start = self.frame_start;
+        let slice_end = rng.random_range((slice_start+1)..27);
+        self.frame_start = slice_end;
+        if self.frame_start >= 26 {
+            self.frame_start = 0;
+        }
+        &self.bytes[slice_start..slice_end]
+    }
+}
 
 /*struct ADAHRSData {
     system_time: u32,  // HHMMSSFF
@@ -156,6 +193,8 @@ struct EMSData {
 
 #[derive(Debug)]
 pub struct D1x0EMSData {
+    bytes: D1x0EmsFrame,
+    frame_start: usize,
     system_time: u32,  // HHMMSSFF
     manifold_pressure: f32,  // unit: inHg * 100 (4)
     oil_temp: i16,  // unit : deg celcius / XXX (3)
@@ -195,6 +234,8 @@ impl D1x0EMSData {
         let phase: f32 = (( time_count as f32 % f as f32 ) * 180.0 / f as f32).to_radians();
         //println!("Phase: {}", phase);
         Self {
+            bytes: [b'0'; D1X0_EMS_FRAME_LENGTH],
+            frame_start: 0,
             system_time: time_count,
             manifold_pressure: 0.0,
             oil_temp: 0,
@@ -227,46 +268,60 @@ impl D1x0EMSData {
             contact_2: 0
         }
     }
-}
 
-impl DynonSerializable for D1x0EMSData {
     fn calc_crc(data: &[u8]) -> u8 {
         let sum: u64 = data[..data.len()-4].iter().map(|x| *x as u64).sum();
         (0x100 - (sum & 0xff)) as u8
     }
 
-    fn serialize(&self) -> DynonSerializedData {
-        
-        let mut data:D1x0EmsFrame = [b'0'; D1X0_EMS_FRAME_LENGTH];
-        
+    fn update(&mut self) {
         // system_time
         let time_string = format!("{:0>8}", self.system_time.to_string());
-        data[..SYSTEM_TIME_LENGTH].copy_from_slice(time_string.as_bytes());
-       
+        self.bytes[..SYSTEM_TIME_LENGTH].copy_from_slice(time_string.as_bytes());
+
         // oil pressure
         let oil_pressure = format!("{:0>3}", self.oil_pressure.to_string());
-        data[15 .. 18].copy_from_slice(oil_pressure.as_bytes());
+        self.bytes[15 .. 18].copy_from_slice(oil_pressure.as_bytes());
 
         // rpm
         let rpm = format!("{:0>3}", (self.rpm / 10).to_string());
-        data[27 .. 30].copy_from_slice(rpm.as_bytes());
+        self.bytes[27 .. 30].copy_from_slice(rpm.as_bytes());
 
         // GP1-3 as unused 'XXXXXXXX'
-        data[43 .. 67].copy_from_slice("XXXXXXXXXXXXXXXXXXXXXXXX".as_bytes());
+        self.bytes[43 .. 67].copy_from_slice("XXXXXXXXXXXXXXXXXXXXXXXX".as_bytes());
 
         // crc
-        let crc = Self::calc_crc(&data);
-        
-        Self::add_crc_crlf(crc, &mut data);
-        DynonSerializedData::D1x0Ems(data)
+        let crc = Self::calc_crc(&self.bytes);
+
+        Self::add_crc_crlf(crc, &mut self.bytes);
     }
 }
 
+impl DynonSerialize for D1x0EMSData {
+
+    fn as_bytes(&mut self) -> &[u8] {
+
+        if (self.frame_start == 0) {
+            self.update();
+        }
+
+        let mut rng = rng();
+        let slice_start = self.frame_start;
+        let slice_end = rng.random_range((slice_start+1)..D1X0_EMS_FRAME_LENGTH+1);
+        self.frame_start = slice_end;
+        if self.frame_start >= D1X0_EMS_FRAME_LENGTH {
+            self.frame_start = 0;
+        }
+        &self.bytes[slice_start..slice_end]
+    }
+}
 
 //---------------------------
 
 #[derive(Debug)]
 pub struct D1x0EFISData {
+    bytes: D1x0EfisFrame,
+    frame_start: usize,
     system_time: u32,  // HHMMSSFF
     pitch: f32,  // unit: deg / n * 10 / positive = pitch up / XXXX is unavailable
     roll: f32,  // unit: deg / n * 10 / positive = right bank / XXXXX
@@ -281,12 +336,15 @@ pub struct D1x0EFISData {
     aoa: u16,  // AOA / unit: % / XX
 }
 
+
 impl D1x0EFISData {
     pub fn new(time_count: u32, freq: Option<u32>) -> Self {
         let f = freq.unwrap_or(100);
         let phase: f32 = (( time_count as f32 % f as f32 ) * 360.0 / f as f32).to_radians();
         //println!("Phase: {}", phase);
         Self {
+            bytes: [b'0'; D1X0_EFIS_FRAME_LENGTH],
+            frame_start: 0,
             system_time: time_count,
             pitch: (25.0 * f32::sin(phase)),
             roll: (60.0 * f32::sin(phase)),
@@ -297,39 +355,52 @@ impl D1x0EFISData {
             aoa: 0
         }
     }
-}
 
-impl DynonSerializable for D1x0EFISData {
-
-    fn serialize(&self) -> DynonSerializedData {
-        
-        let mut data:D1x0EfisFrame = [b'0'; D1X0_EFIS_FRAME_LENGTH];
-        
+    fn update(&mut self) {
         // system_time
         let time_string = format!("{:0>8}", self.system_time.to_string());
-        data[..SYSTEM_TIME_LENGTH].copy_from_slice(time_string.as_bytes());
-       
+        self.bytes[..SYSTEM_TIME_LENGTH].copy_from_slice(time_string.as_bytes());
+
         // pitch
-        data[8] = if self.pitch < 0.0  { b'-' } else { b'+' }; 
+        self.bytes[8] = if self.pitch < 0.0  { b'-' } else { b'+' };
         let pitch = format!("{:0>3}", ((self.pitch * 10.0).abs() as u32).to_string());
         //println!("Pitch {:?}", pitch.as_bytes());
-        data[9 .. 12].copy_from_slice(pitch.as_bytes());
+        self.bytes[9 .. 12].copy_from_slice(pitch.as_bytes());
 
         // roll
-        data[12] = if self.roll < 0.0  { b'-' } else { b'+' }; 
+        self.bytes[12] = if self.roll < 0.0  { b'-' } else { b'+' };
         let roll = format!("{:0>4}", ((self.roll * 10.0).abs() as u32).to_string());
-        data[13 .. 17].copy_from_slice(roll.as_bytes());
+        self.bytes[13 .. 17].copy_from_slice(roll.as_bytes());
 
         // // yaw
         // let yaw = format!("{:0>3}", self.yaw.to_string());
         // data[18 .. 21].copy_from_slice(roll.as_bytes());
 
-       
+
         // crc
-        let crc = Self::calc_crc(&data);
-        
-        Self::add_crc_crlf(crc, &mut data);
-        DynonSerializedData::D1x0Efis(data)
+        let crc = Self::calc_crc(&self.bytes);
+
+        Self::add_crc_crlf(crc, &mut self.bytes);
+    }
+}
+
+
+impl DynonSerialize for D1x0EFISData {
+
+    fn as_bytes(&mut self) -> &[u8] {
+
+        if (self.frame_start == 0) {
+            self.update();
+        }
+
+        let mut rng = rng();
+        let slice_start = self.frame_start;
+        let slice_end = rng.random_range((slice_start+1)..D1X0_EMS_FRAME_LENGTH+1);
+        self.frame_start = slice_end;
+        if self.frame_start >= D1X0_EMS_FRAME_LENGTH {
+            self.frame_start = 0;
+        }
+        &self.bytes[slice_start..slice_end]
     }
 }
 
@@ -369,11 +440,9 @@ fn test_d1x0_efis_serialize() {
             assert_eq!(&y[..8], "12345678".as_bytes());
             let l = y.len();
             assert_eq!(&y[l-4 .. l-2], "6F".as_bytes());
-        }      
+        }
         _ => panic!("Returned wrong type."),
     }
-
-    
 }
 
 
