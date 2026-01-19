@@ -48,7 +48,6 @@ impl D1x0EFISDevice {
         let f = self.freq;
         let phase: f32 = (( self.system_time as f32 % f as f32 ) * 180.0 / f as f32).to_radians();
         // system_time
-        self.system_time += 1;
         let time_string = format!("{:0>8}", self.system_time.to_string());
         self.bytes[..SYSTEM_TIME_LENGTH].copy_from_slice(time_string.as_bytes());
 
