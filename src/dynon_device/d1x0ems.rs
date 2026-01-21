@@ -148,6 +148,7 @@ fn test_d1x0_ems_calc_crc() {
 #[test]
 fn test_d1x0_ems_serialize() {
     let mut x = D1x0EMSDevice::new(Some(100));
+    let crc ="45";
     println!("X: {:?}", &x);
     let (eol, bytes) = x.as_bytes(false);
     match str::from_utf8(&bytes) {
@@ -155,7 +156,7 @@ fn test_d1x0_ems_serialize() {
             println!("Y: {:?}", &s);
             assert_eq!(&s[..8], "00000001");
             let l = s.len();
-            assert_eq!(&s[l-4 .. l-2], "45");
+            assert_eq!(&s[l-4 .. l-2], crc);
         }
         _ => panic!("Returned wrong type."),
     }
