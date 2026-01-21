@@ -7,7 +7,7 @@ use crate::dynon_device::*;
 const D1X0_EFIS_FRAME_LENGTH: usize = 53;
 type D1x0EfisFrame = [u8; D1X0_EFIS_FRAME_LENGTH];
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct D1x0EFISDevice {
     bytes: D1x0EfisFrame,
     frame_start: usize,
@@ -81,9 +81,9 @@ impl D1x0EFISDevice {
 
 impl DynonDevice for D1x0EFISDevice {
 
-    fn as_bytes(&mut self) -> (bool, &[u8]) {
-        let slice_start = self.frame_start;
-        let slice_end = rng().random_range((slice_start+1)..D1X0_EFIS_FRAME_LENGTH+1);
+    fn as_bytes(&mut self, slice: bool) -> (bool, &[u8]) {
+        let slice_start = if slice {self.frame_start} else {0};
+        let slice_end = if slice {rng().random_range((slice_start+1)..D1X0_EFIS_FRAME_LENGTH+1)} else {D1X0_EFIS_FRAME_LENGTH};
         self.frame_start = slice_end;
         if self.frame_start >= D1X0_EFIS_FRAME_LENGTH {
             self.frame_start = 0;
@@ -107,16 +107,15 @@ fn test_d1x0_efis_calc_crc() {
 
 #[test]
 fn test_d1x0_efis_serialize() {
-    let x = D1x0EFISDevice::new(12345678, None);
+    let mut x = D1x0EFISDevice::new(Some(100));
     println!("X: {:?}", x);
-    let d = x.serialize();
-
-    match d {
-        DynonSerializedData::D1x0Efis(y) => {
-            println!("Y: {:?}",str::from_utf8(&y));
-            assert_eq!(&y[..8], "12345678".as_bytes());
-            let l = y.len();
-            assert_eq!(&y[l-4 .. l-2], "6F".as_bytes());
+    let (eol, bytes) = x.as_bytes(false);
+    match str::from_utf8(&bytes) {
+        Ok(s) => {
+            println!("Y: {:?}",&s);
+            assert_eq!(&s[..8], "00000001");
+            let l = s.len();
+            assert_eq!(&s[l-4 .. l-2], "37");
         }
         _ => panic!("Returned wrong type."),
     }

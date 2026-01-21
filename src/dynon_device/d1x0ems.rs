@@ -2,13 +2,13 @@
 #[cfg(test)]
 
 extern crate rand;
-
+use core::str;
 use crate::dynon_device::*;
 
 const D1X0_EMS_FRAME_LENGTH: usize = 121;
 type D1x0EmsFrame = [u8; D1X0_EMS_FRAME_LENGTH];
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct D1x0EMSDevice {
     bytes: D1x0EmsFrame,
     frame_start: usize,
@@ -120,10 +120,10 @@ impl D1x0EMSDevice {
 
 impl DynonDevice for D1x0EMSDevice {
 
-    fn as_bytes(&mut self) -> (bool, &[u8]) {
+    fn as_bytes(&mut self, slice: bool) -> (bool, &[u8]) {
         let mut rng = rng();
-        let slice_start = self.frame_start;
-        let slice_end = rng.random_range((slice_start+1)..D1X0_EMS_FRAME_LENGTH+1);
+        let slice_start = if slice {self.frame_start} else {0};
+        let slice_end = if slice {rng.random_range((slice_start+1)..D1X0_EMS_FRAME_LENGTH+1)} else {D1X0_EMS_FRAME_LENGTH};
         self.frame_start = slice_end;
         if self.frame_start >= D1X0_EMS_FRAME_LENGTH {
             self.frame_start = 0;
@@ -140,22 +140,22 @@ fn test_d1x0_ems_calc_crc() {
     let mut x: D1x0EmsFrame = [0; D1X0_EMS_FRAME_LENGTH];
     x.copy_from_slice("0012224826351340262441240122631320562191191OAT00090TRE-0061FLP0001020481378139214061421143514503583533633743843951103D200".as_bytes());
 
-    let y = D1x0EMSData::calc_crc(&x);
+    let y = D1x0EMSDevice::calc_crc(&x);
     //println!("Y: {:?}",y);
     assert_eq!(y,0xD2);
 }
 
 #[test]
 fn test_d1x0_ems_serialize() {
-    let x = D1x0EMSData::new(12345678, None);
-    println!("X: {:?}", x);
-    let d = x.serialize();
-    match d {
-        DynonSerializedData::D1x0Ems(y) => {
-            println!("Y: {:?}",str::from_utf8(&y));
-            assert_eq!(&y[..8], "12345678".as_bytes());
-            let l = y.len();
-            assert_eq!(&y[l-4 .. l-2], "1D".as_bytes());
+    let mut x = D1x0EMSDevice::new(Some(100));
+    println!("X: {:?}", &x);
+    let (eol, bytes) = x.as_bytes(false);
+    match str::from_utf8(&bytes) {
+        Ok(s) => {
+            println!("Y: {:?}", &s);
+            assert_eq!(&s[..8], "00000001");
+            let l = s.len();
+            assert_eq!(&s[l-4 .. l-2], "45");
         }
         _ => panic!("Returned wrong type."),
     }

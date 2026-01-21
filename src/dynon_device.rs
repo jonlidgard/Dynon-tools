@@ -33,7 +33,7 @@ pub trait DynonDevice {
         data[l-2] = b'\r';
     }
 
-    fn as_bytes(&mut self) -> (bool, &[u8]);
+    fn as_bytes(&mut self, slice: bool) -> (bool, &[u8]);
 }
 
 
@@ -67,10 +67,10 @@ impl TestDevice {
 }
 
 impl DynonDevice for TestDevice {
-    fn as_bytes(&mut self) -> (bool, &[u8]) {
+    fn as_bytes(&mut self, slice: bool) -> (bool, &[u8]) {
         let mut rng = rng();
-        let slice_start = self.frame_start;
-        let slice_end = rng.random_range((slice_start+1)..27);
+        let slice_start = if slice {self.frame_start} else {0};
+        let slice_end = if slice {rng.random_range((slice_start+1)..27)} else {27};
         self.frame_start = slice_end;
         if self.frame_start >= 26 {
             self.frame_start = 0;

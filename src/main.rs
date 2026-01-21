@@ -47,7 +47,7 @@ fn valid_baud(val: &str) -> std::result::Result<(), String> {
 fn send_packets(dynon_device: &mut impl DynonDevice, mut port: Option<Box<dyn SerialPort>>, rate: &u32) {
     let r = *rate;
     loop {
-        let (eol, bytes) = dynon_device.as_bytes();
+        let (eol, bytes) = dynon_device.as_bytes(true);
         match str::from_utf8(&bytes) {
             Ok(s) => {
                 print!("{}", s);
@@ -81,7 +81,7 @@ fn send_packets(dynon_device: &mut impl DynonDevice, mut port: Option<Box<dyn Se
 
 
 fn main() {
-    let matches = Command::new("Serialport Example - Heartbeat")
+    let matches = Command::new("Simulate")
         .about(ABOUT)
         .disable_version_flag(true)
         .arg(
@@ -92,11 +92,13 @@ fn main() {
         ).arg(
             Arg::new("port")
                 .long("port")
+                .short('p')
                 .help("The device path to a serial port")
                 .required(false),
         ).arg(
             Arg::new("baud")
                 .long("baud")
+                .short('b')
                 .help("The baud rate to connect at")
                 .use_value_delimiter(false)
                 .default_value("115200")
@@ -105,6 +107,7 @@ fn main() {
         .arg(
             Arg::new("rate")
                 .long("rate")
+                .short('r')
                 .help("Frequency (Hz) to repeat transmission of the pattern (0 indicates sending only once")
                 .num_args(1)
                 .default_value("1")
@@ -113,8 +116,8 @@ fn main() {
         .get_matches();
 
     let data_type: &String = matches.get_one::<String>("type").expect("default");
-    let baud_rate = matches.get_one::<u32>("baud").unwrap(); //.parse::<u32>().unwrap();
-    let rate = matches.get_one::<u32>("rate").unwrap(); //.parse::<u32>().unwrap();
+    let baud_rate = matches.get_one::<u32>("baud").unwrap();
+    let rate = matches.get_one::<u32>("rate").unwrap();
     let mut port: Option<Box<dyn SerialPort>> = Option::None;
     let port_name = matches.get_one::<String>("port");
     if let Some(port_name) = port_name {
